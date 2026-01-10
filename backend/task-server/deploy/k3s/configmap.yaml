@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: task-server-config
+data:
+  Authentication__Firebase__ProjectId: "qdrix-12345"
+  Authentication__Firebase__ValidAudience: "qdrix-12345"
+  Authentication__Firebase__ValidIssuer: "https://securetoken.google.com/qdrix-12345"
+  TaskServer__MaxConcurrentTasks: "4"
+  TaskServer__DefaultTaskTimeoutMinutes: "60"
+  TaskServer__TaskQueuePollingIntervalMs: "100"
+  SignalR__KeepAliveIntervalSeconds: "15"
+  SignalR__ClientTimeoutSeconds: "30"
+  Logging__LogLevel__Default: "Information"

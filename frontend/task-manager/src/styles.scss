@@ -1,0 +1,66 @@
+@use '@angular/material' as mat;
+
+// Include Material core styles
+@include mat.core();
+
+// Define the theme using Material 3 (M3)
+$theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+    tertiary: mat.$blue-palette,
+  ),
+  density: (
+    scale: 0,
+  )
+));
+
+// Apply the theme
+html {
+  @include mat.all-component-themes($theme);
+}
+
+// Global styles
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+body {
+  background-color: #fafafa;
+}
+
+// Utility classes
+.spacer {
+  flex: 1 1 auto;
+}
+
+.full-width {
+  width: 100%;
+}
+
+// Task-related colors
+.state-queued {
+  color: #1976d2;
+}
+
+.state-executing {
+  color: #ff9800;
+}
+
+.state-completed {
+  color: #4caf50;
+}
+
+.state-cancelled {
+  color: #9e9e9e;
+}
+
+.state-errored {
+  color: #f44336;
+}
+
+.state-terminated {
+  color: #f44336;
+}

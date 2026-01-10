@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  task-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "5240:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - Authentication__Firebase__ProjectId=qdrix-12345
+      - Authentication__Firebase__ValidAudience=qdrix-12345
+      - Authentication__Firebase__ValidIssuer=https://securetoken.google.com/qdrix-12345
+      - TaskServer__MaxConcurrentTasks=4
+      - TaskServer__DefaultTaskTimeoutMinutes=60
+      - SignalR__EnableDetailedErrors=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
