@@ -120,8 +120,9 @@ import { AuthService, TokenInfo } from '../../services/auth.service';
     }
 
     mat-dialog-content {
-      min-width: 450px;
-      max-width: 550px;
+      width: 450px;
+      max-width: 100%;
+      overflow: visible;
     }
 
     .description {
@@ -205,13 +206,28 @@ import { AuthService, TokenInfo } from '../../services/auth.service';
     }
 
     mat-dialog-actions {
-      padding: 16px 24px;
-      margin: 0 -24px -24px;
+      padding: 16px 8px 16px 0;
+      margin: 0;
       border-top: 1px solid #e0e0e0;
     }
 
     mat-dialog-actions button mat-icon {
       margin-right: 4px;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 500px) {
+      mat-dialog-content {
+        width: 100%;
+      }
+
+      .description {
+        font-size: 13px;
+      }
+
+      mat-dialog-actions {
+        padding: 12px 0 0 0;
+      }
     }
   `]
 })

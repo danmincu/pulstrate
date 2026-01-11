@@ -64,3 +64,15 @@ body {
 .state-terminated {
   color: #f44336;
 }
+
+// Compact dialog - fits content without scroll when content is small
+.compact-dialog {
+  .mat-mdc-dialog-container {
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .mat-mdc-dialog-surface {
+    overflow: hidden !important;
+  }
+}

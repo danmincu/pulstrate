@@ -20,42 +20,36 @@ import { SignalRService, ConnectionInfo, ConnectionStatus } from '../services/si
               [matTooltip]="getTooltip(info)"
               matTooltipPosition="below"
               (click)="onStatusClick(info)">
-        <div class="status-indicator">
-          @switch (info.status) {
-            @case ('connected') {
-              <mat-icon class="status-icon">wifi</mat-icon>
-            }
-            @case ('connecting') {
-              <mat-icon class="status-icon spinning">sync</mat-icon>
-            }
-            @case ('reconnecting') {
-              <mat-icon class="status-icon spinning">sync</mat-icon>
-            }
-            @case ('disconnected') {
-              <mat-icon class="status-icon">wifi_off</mat-icon>
-            }
+        @switch (info.status) {
+          @case ('connected') {
+            <mat-icon class="status-icon">wifi</mat-icon>
           }
-          <span class="status-dot"></span>
-        </div>
+          @case ('connecting') {
+            <mat-icon class="status-icon spinning">sync</mat-icon>
+          }
+          @case ('reconnecting') {
+            <mat-icon class="status-icon spinning">sync</mat-icon>
+          }
+          @case ('disconnected') {
+            <mat-icon class="status-icon">wifi_off</mat-icon>
+          }
+        }
       </button>
     }
   `,
   styles: [`
     .status-button {
-      position: relative;
+      background: rgba(255, 255, 255, 0.25);
     }
 
-    .status-indicator {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .status-button:hover {
+      background: rgba(255, 255, 255, 0.4);
     }
 
     .status-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
     }
 
     .status-icon.spinning {
@@ -67,51 +61,17 @@ import { SignalRService, ConnectionInfo, ConnectionStatus } from '../services/si
       to { transform: rotate(360deg); }
     }
 
-    .status-dot {
-      position: absolute;
-      bottom: -2px;
-      right: -2px;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      border: 1.5px solid white;
-    }
-
     .connected .status-icon {
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .connected .status-dot {
-      background-color: #4caf50;
+      color: #00c853;
     }
 
     .connecting .status-icon,
     .reconnecting .status-icon {
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .connecting .status-dot,
-    .reconnecting .status-dot {
-      background-color: #ff9800;
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.8); }
+      color: #ffab00;
     }
 
     .disconnected .status-icon {
-      color: rgba(255, 255, 255, 0.6);
-    }
-
-    .disconnected .status-dot {
-      background-color: #f44336;
-    }
-
-    /* Hover effects */
-    .status-button:hover .status-icon {
-      color: white;
+      color: #ff5252;
     }
 
     .disconnected:hover,

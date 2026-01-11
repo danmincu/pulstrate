@@ -58,7 +58,7 @@ import { Observable, map } from 'rxjs';
       align-items: center;
       gap: 6px;
       padding: 4px 12px;
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.25);
       border-radius: 16px;
       font-size: 13px;
       cursor: default;
@@ -68,7 +68,7 @@ import { Observable, map } from 'rxjs';
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #69f0ae;
+      color: #00c853;
     }
 
     .user-label {
@@ -79,20 +79,30 @@ import { Observable, map } from 'rxjs';
     }
 
     button[mat-stroked-button] {
-      border-color: rgba(255, 255, 255, 0.5);
-      color: white;
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid white;
+      color: #1976d2;
+      font-weight: 500;
+    }
+
+    button[mat-stroked-button]:hover {
+      background: white;
     }
 
     button[mat-stroked-button] mat-icon {
       margin-right: 4px;
+      color: #1976d2;
     }
 
     button[mat-icon-button] {
-      color: rgba(255, 255, 255, 0.8);
+      color: #1976d2;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.5);
     }
 
     button[mat-icon-button]:hover {
-      color: white;
+      color: #1565c0;
+      background: white;
     }
   `]
 })
@@ -104,8 +114,10 @@ export class AuthButtonComponent {
 
   onLogin(): void {
     this.dialog.open(LoginDialogComponent, {
-      width: '550px',
-      disableClose: false
+      maxWidth: '95vw',
+      disableClose: false,
+      autoFocus: 'dialog',
+      panelClass: 'compact-dialog'
     });
   }
 
