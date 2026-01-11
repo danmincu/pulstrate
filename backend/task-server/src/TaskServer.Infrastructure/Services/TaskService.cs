@@ -24,7 +24,7 @@ public class TaskService : ITaskService
         _cancellationService = cancellationService;
     }
 
-    public async Task<TaskItem> CreateTaskAsync(Guid ownerId, CreateTaskRequest request, CancellationToken ct = default)
+    public async Task<TaskItem> CreateTaskAsync(Guid ownerId, CreateTaskRequest request, string? authToken = null, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var groupId = request.GroupId ?? TaskGroupConstants.DefaultGroupId;
@@ -57,7 +57,8 @@ public class TaskService : ITaskService
             UpdatedAt = now,
             ParentTaskId = request.ParentTaskId,
             Weight = request.Weight,
-            SubtaskParallelism = request.SubtaskParallelism
+            SubtaskParallelism = request.SubtaskParallelism,
+            AuthToken = authToken
         };
 
         await _repository.AddAsync(task, ct);
@@ -183,13 +184,13 @@ public class TaskService : ITaskService
 
     // Hierarchical task support
 
-    public async Task<TaskItem> CreateTaskHierarchyAsync(Guid ownerId, CreateTaskHierarchyRequest request, CancellationToken ct = default)
+    public async Task<TaskItem> CreateTaskHierarchyAsync(Guid ownerId, CreateTaskHierarchyRequest request, string? authToken = null, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var allTasks = new List<TaskItem>();
 
         // Recursively build all tasks
-        var parentTask = BuildTaskHierarchy(ownerId, request, null, now, allTasks);
+        var parentTask = BuildTaskHierarchy(ownerId, request, null, now, authToken, allTasks);
 
         // Add all tasks atomically
         await _repository.AddBatchAsync(allTasks, ct);
@@ -206,7 +207,7 @@ public class TaskService : ITaskService
         return parentTask;
     }
 
-    private TaskItem BuildTaskHierarchy(Guid ownerId, CreateTaskHierarchyRequest request, Guid? parentId, DateTime now, List<TaskItem> allTasks)
+    private TaskItem BuildTaskHierarchy(Guid ownerId, CreateTaskHierarchyRequest request, Guid? parentId, DateTime now, string? authToken, List<TaskItem> allTasks)
     {
         var taskRequest = request.ParentTask;
         var taskId = taskRequest.Id ?? Guid.NewGuid();
@@ -226,7 +227,8 @@ public class TaskService : ITaskService
             UpdatedAt = now,
             ParentTaskId = parentId,
             Weight = taskRequest.Weight,
-            SubtaskParallelism = taskRequest.SubtaskParallelism
+            SubtaskParallelism = taskRequest.SubtaskParallelism,
+            AuthToken = authToken
         };
 
         allTasks.Add(task);
@@ -234,7 +236,7 @@ public class TaskService : ITaskService
         // Recursively build children
         foreach (var childRequest in request.ChildTasks)
         {
-            BuildTaskHierarchy(ownerId, childRequest, taskId, now, allTasks);
+            BuildTaskHierarchy(ownerId, childRequest, taskId, now, authToken, allTasks);
         }
 
         return task;

@@ -24,4 +24,8 @@ public class TaskItem
     public Guid? ParentTaskId { get; set; }
     public double Weight { get; set; } = 1.0;
     public bool SubtaskParallelism { get; set; } = true;
+
+    // Authentication token for downstream service calls
+    // Captured at task creation time, used by executors for authenticated HTTP calls
+    public string? AuthToken { get; set; }
 }

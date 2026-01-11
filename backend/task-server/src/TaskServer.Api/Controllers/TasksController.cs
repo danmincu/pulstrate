@@ -43,6 +43,27 @@ public class TasksController : ControllerBase
     }
 #endif
 
+    /// <summary>
+    /// Extracts the JWT bearer token from the Authorization header.
+    /// Returns null if no token is present (e.g., in DEBUG mode with AllowAnonymous).
+    /// </summary>
+    private string? GetAuthToken()
+    {
+        var authHeader = Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrEmpty(authHeader))
+        {
+            return null;
+        }
+
+        // Extract token from "Bearer <token>" format
+        if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return authHeader.Substring(7);
+        }
+
+        return authHeader;
+    }
+
     public TasksController(
         ITaskService taskService,
         ITaskGroupRepository groupRepository,
@@ -103,7 +124,8 @@ public class TasksController : ControllerBase
     {
         try
         {
-            var task = await _taskService.CreateTaskAsync(GetUserId(), request, ct);
+            var authToken = GetAuthToken();
+            var task = await _taskService.CreateTaskAsync(GetUserId(), request, authToken, ct);
             _logger.LogInformation("Created task {TaskId} of type {TaskType} in group {GroupId}", task.Id, task.Type, task.GroupId);
             var response = await ToResponseWithGroupAsync(task, ct);
             return CreatedAtAction(nameof(GetTask), new { id = task.Id }, response);
@@ -210,7 +232,8 @@ public class TasksController : ControllerBase
     {
         try
         {
-            var task = await _taskService.CreateTaskHierarchyAsync(GetUserId(), request, ct);
+            var authToken = GetAuthToken();
+            var task = await _taskService.CreateTaskHierarchyAsync(GetUserId(), request, authToken, ct);
             _logger.LogInformation("Created hierarchical task {TaskId} of type {TaskType}", task.Id, task.Type);
             var response = await ToResponseWithGroupAsync(task, ct);
             return CreatedAtAction(nameof(GetTask), new { id = task.Id }, response);

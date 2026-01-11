@@ -139,9 +139,16 @@ builder.Services.AddTaskServer(options =>
 });
 
 builder.Services.AddInMemoryTaskStorage();
+
+// Add HttpClient factory for microservice calls
+builder.Services.AddHttpClient("TaskExecutor");
+builder.Services.AddSingleton<ITaskHttpClientFactory, TaskHttpClientFactory>();
+
+// Register task executors
 builder.Services.AddTaskExecutor<DemoTaskExecutor>();
 builder.Services.AddTaskExecutor<SimpleHierarchicalExecutor>();
 builder.Services.AddTaskExecutor<HierarchicalParentExecutor>();
+builder.Services.AddTaskExecutor<MicroserviceCallExecutor>();
 
 // Load plugin executors from plugins folder
 var pluginsPath = Path.Combine(AppContext.BaseDirectory, "plugins");

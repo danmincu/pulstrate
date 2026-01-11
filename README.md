@@ -713,6 +713,68 @@ export interface TaskFormConfig {
 
 ---
 
+## Auth Token Propagation for Microservice Calls
+
+Tasks can make authenticated HTTP calls to downstream microservices using the JWT token from the original API request.
+
+### How It Works
+
+1. **Token Capture**: JWT token is captured at task creation and stored in `TaskItem.AuthToken`
+2. **Token Access**: Executors access the token via `task.AuthToken`
+3. **HttpClient Factory**: Use `ITaskHttpClientFactory` to create pre-configured HttpClient
+
+### Example: Authenticated Executor
+
+```csharp
+public class MyMicroserviceExecutor : ITaskExecutor
+{
+    private readonly ITaskHttpClientFactory _httpClientFactory;
+
+    public MyMicroserviceExecutor(ITaskHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+
+    public string TaskType => "my-microservice-task";
+
+    public async Task ExecuteAsync(TaskItem task, IProgress<TaskProgressUpdate> progress, CancellationToken ct)
+    {
+        // Create HttpClient with the user's auth token
+        using var client = _httpClientFactory.CreateClient(task.AuthToken, "https://api.example.com");
+
+        // All requests include: Authorization: Bearer <token>
+        var response = await client.GetAsync("/api/data", ct);
+        var content = await response.Content.ReadAsStringAsync(ct);
+
+        progress.Report(new TaskProgressUpdate(100, "Completed", content));
+    }
+}
+```
+
+### Built-in Microservice Call Task
+
+The `microservice-call` task type is included for making HTTP calls with auth propagation:
+
+```json
+{
+  "type": "microservice-call",
+  "payload": "{\"url\":\"https://api.example.com/endpoint\",\"method\":\"GET\",\"retryCount\":3,\"timeoutSeconds\":30}"
+}
+```
+
+**Payload Options:**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `url` | string | (required) | Target URL |
+| `method` | string | GET | HTTP method |
+| `requestBody` | string | null | Request body (for POST/PUT) |
+| `contentType` | string | application/json | Content type |
+| `retryCount` | int | 0 | Retry attempts on failure |
+| `retryDelayMs` | int | 1000 | Delay between retries |
+| `timeoutSeconds` | int | 30 | Request timeout |
+
+---
+
 ## JSON Payloads for Hierarchical Tasks
 
 ### Simple Parent with Mixed Children

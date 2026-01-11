@@ -1144,9 +1144,86 @@ public abstract class TaskExecutorBase : ITaskExecutor
 
 ---
 
-## 17. Frontend Features (Angular)
+## 17. Auth Token Propagation
 
-### 17.1 Real-time History Tracking
+Tasks can make authenticated HTTP calls to downstream microservices using the JWT token captured at task creation time.
+
+### 17.1 How It Works
+
+1. **Token Capture**: Controller extracts JWT from `Authorization` header and passes to `ITaskService`
+2. **Token Storage**: Token stored in `TaskItem.AuthToken` property
+3. **Token Access**: Executors access via `task.AuthToken`
+4. **HttpClient Factory**: `ITaskHttpClientFactory.CreateClient(task.AuthToken)` creates pre-configured client
+
+### 17.2 Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `TaskItem.AuthToken` | Core/Entities | Stores captured JWT token |
+| `ITaskHttpClientFactory` | Core/Interfaces | Creates authenticated HttpClient |
+| `TaskHttpClientFactory` | Infrastructure/Services | Implementation |
+| `MicroserviceCallExecutor` | Infrastructure/Executors | Built-in HTTP call executor |
+
+### 17.3 Built-in microservice-call Task
+
+**Task Type**: `microservice-call`
+
+**Payload**:
+```json
+{
+  "url": "https://api.example.com/endpoint",
+  "method": "GET",
+  "requestBody": "{\"key\":\"value\"}",
+  "contentType": "application/json",
+  "retryCount": 3,
+  "retryDelayMs": 1000,
+  "timeoutSeconds": 30
+}
+```
+
+**Progress Payload**:
+```json
+{
+  "phase": "completed",
+  "attempt": 1,
+  "maxAttempts": 4,
+  "statusCode": 200,
+  "responseBody": "{\"result\":\"success\"}",
+  "hasAuthToken": true
+}
+```
+
+### 17.4 Example Custom Executor
+
+```csharp
+public class MyApiExecutor : ITaskExecutor
+{
+    private readonly ITaskHttpClientFactory _httpClientFactory;
+
+    public MyApiExecutor(ITaskHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+
+    public string TaskType => "my-api-call";
+
+    public async Task ExecuteAsync(TaskItem task, IProgress<TaskProgressUpdate> progress, CancellationToken ct)
+    {
+        // Create HttpClient with user's auth token
+        using var client = _httpClientFactory.CreateClient(task.AuthToken, "https://api.example.com");
+
+        // Authorization: Bearer <token> is automatically set
+        var response = await client.GetAsync("/api/data", ct);
+        // ...
+    }
+}
+```
+
+---
+
+## 18. Frontend Features (Angular)
+
+### 18.1 Real-time History Tracking
 
 Root hierarchical tasks display live history of child activity:
 
@@ -1165,7 +1242,7 @@ Root hierarchical tasks display live history of child activity:
 - `ProgressHistoryEntry` and `StateChangeHistoryEntry` interfaces in `task.model.ts`
 - `TaskTreeNode` includes `progressHistory` and `stateChangeHistory` arrays (populated for level 0 only)
 
-### 17.2 SignalR Connection Resilience
+### 18.2 SignalR Connection Resilience
 
 **Automatic Reconnect:**
 - Built-in SignalR retry: 0s, 1s, 2s, 5s, 10s, 30s delays
@@ -1188,7 +1265,7 @@ Root hierarchical tasks display live history of child activity:
 - Task list automatically refreshes when connection is restored
 - `reconnected$` Subject emits when connection restored after disconnection
 
-### 17.3 UI Enhancements
+### 18.3 UI Enhancements
 
 **Background Color by Nesting Level:**
 - Level 0 (root): #ffffff (white)
@@ -1211,7 +1288,7 @@ Root hierarchical tasks display live history of child activity:
 - Uses single-task actions for leaf tasks
 - Consistent naming regardless of task type
 
-### 17.4 State Management
+### 18.4 State Management
 
 `TaskStoreService` uses reactive patterns:
 - `tasksMap$`: BehaviorSubject<Map<string, TaskResponse>> - flat task storage
