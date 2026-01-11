@@ -8,7 +8,7 @@ import { SignalRService, ConnectionInfo, ConnectionStatus } from '../services/si
 @Component({
   selector: 'app-connection-status',
   standalone: true,
-  imports: [AsyncPipe, DatePipe, MatIconModule, MatTooltipModule, MatButtonModule],
+  imports: [AsyncPipe, MatIconModule, MatTooltipModule, MatButtonModule],
   template: `
     @if (connectionInfo$ | async; as info) {
       <button mat-icon-button

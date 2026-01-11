@@ -23,5 +23,9 @@ public record TaskResponse(
     Guid? ParentTaskId,
     double Weight,
     bool SubtaskParallelism,
-    int ChildCount
+    int ChildCount,
+    // History tracking
+    bool TrackHistory,
+    IReadOnlyList<ProgressHistoryEntryDto>? ProgressHistory,
+    IReadOnlyList<StateChangeHistoryEntryDto>? StateChangeHistory
 );

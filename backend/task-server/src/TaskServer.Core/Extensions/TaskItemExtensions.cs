@@ -6,7 +6,12 @@ namespace TaskServer.Core.Extensions;
 
 public static class TaskItemExtensions
 {
-    public static TaskResponse ToResponse(this TaskItem task, string? groupName = null, int childCount = 0)
+    public static TaskResponse ToResponse(
+        this TaskItem task,
+        string? groupName = null,
+        int childCount = 0,
+        IReadOnlyList<ProgressHistoryEntryDto>? progressHistory = null,
+        IReadOnlyList<StateChangeHistoryEntryDto>? stateChangeHistory = null)
     {
         return new TaskResponse(
             task.Id,
@@ -29,7 +34,10 @@ public static class TaskItemExtensions
             task.ParentTaskId,
             task.Weight,
             task.SubtaskParallelism,
-            childCount
+            childCount,
+            task.TrackHistory,
+            progressHistory,
+            stateChangeHistory
         );
     }
 }

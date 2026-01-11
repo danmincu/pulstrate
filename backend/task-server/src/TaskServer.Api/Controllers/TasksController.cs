@@ -21,6 +21,7 @@ public class TasksController : ControllerBase
     private readonly ITaskService _taskService;
     private readonly ITaskGroupRepository _groupRepository;
     private readonly ITaskRepository _taskRepository;
+    private readonly ITaskHistoryService _historyService;
     private readonly ILogger<TasksController> _logger;
 
 #if DEBUG
@@ -68,11 +69,13 @@ public class TasksController : ControllerBase
         ITaskService taskService,
         ITaskGroupRepository groupRepository,
         ITaskRepository taskRepository,
+        ITaskHistoryService historyService,
         ILogger<TasksController> logger)
     {
         _taskService = taskService;
         _groupRepository = groupRepository;
         _taskRepository = taskRepository;
+        _historyService = historyService;
         _logger = logger;
     }
 
@@ -86,7 +89,19 @@ public class TasksController : ControllerBase
     {
         var groupName = await GetGroupNameAsync(task.GroupId, ct);
         var childCount = await _taskRepository.GetChildCountAsync(task.Id, ct);
-        return task.ToResponse(groupName, childCount);
+
+        // Include history for root tasks with tracking enabled
+        IReadOnlyList<Core.DTOs.ProgressHistoryEntryDto>? progressHistory = null;
+        IReadOnlyList<Core.DTOs.StateChangeHistoryEntryDto>? stateChangeHistory = null;
+
+        if (task.TrackHistory && task.RootTaskId == task.Id)
+        {
+            var history = await _historyService.GetHistoryAsync(task.Id);
+            progressHistory = history.ProgressHistory;
+            stateChangeHistory = history.StateChangeHistory;
+        }
+
+        return task.ToResponse(groupName, childCount, progressHistory, stateChangeHistory);
     }
 
     [HttpGet]

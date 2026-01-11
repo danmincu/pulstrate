@@ -35,8 +35,12 @@ public class TaskService : ITaskService
     {
         var now = DateTime.UtcNow;
         var groupId = request.GroupId ?? TaskGroupConstants.DefaultGroupId;
+        var taskId = request.Id ?? Guid.NewGuid();
 
-        // Validate parent task if specified
+        // Determine RootTaskId and TrackHistory based on parent
+        Guid rootTaskId = taskId;
+        bool trackHistory = request.TrackHistory;
+
         if (request.ParentTaskId.HasValue)
         {
             var parent = await _repository.GetByIdAsync(request.ParentTaskId.Value, ct);
@@ -48,11 +52,14 @@ public class TaskService : ITaskService
             {
                 throw new UnauthorizedAccessException("Parent task belongs to a different user.");
             }
+            // Inherit RootTaskId and TrackHistory from parent
+            rootTaskId = parent.RootTaskId;
+            trackHistory = parent.TrackHistory;
         }
 
         var task = new TaskItem
         {
-            Id = request.Id ?? Guid.NewGuid(),
+            Id = taskId,
             OwnerId = ownerId,
             GroupId = groupId,
             Priority = request.Priority,
@@ -65,7 +72,9 @@ public class TaskService : ITaskService
             ParentTaskId = request.ParentTaskId,
             Weight = request.Weight,
             SubtaskParallelism = request.SubtaskParallelism,
-            AuthToken = authToken
+            AuthToken = authToken,
+            RootTaskId = rootTaskId,
+            TrackHistory = trackHistory
         };
 
         await _repository.AddAsync(task, ct);
@@ -196,8 +205,8 @@ public class TaskService : ITaskService
         var now = DateTime.UtcNow;
         var allTasks = new List<TaskItem>();
 
-        // Recursively build all tasks
-        var parentTask = BuildTaskHierarchy(ownerId, request, null, now, authToken, allTasks);
+        // Recursively build all tasks (root sets its own Id as RootTaskId)
+        var parentTask = BuildTaskHierarchy(ownerId, request, null, null, null, now, authToken, allTasks);
 
         // Add all tasks atomically
         await _repository.AddBatchAsync(allTasks, ct);
@@ -214,11 +223,16 @@ public class TaskService : ITaskService
         return parentTask;
     }
 
-    private TaskItem BuildTaskHierarchy(Guid ownerId, CreateTaskHierarchyRequest request, Guid? parentId, DateTime now, string? authToken, List<TaskItem> allTasks)
+    private TaskItem BuildTaskHierarchy(Guid ownerId, CreateTaskHierarchyRequest request, Guid? parentId, Guid? rootTaskId, bool? trackHistory, DateTime now, string? authToken, List<TaskItem> allTasks)
     {
         var taskRequest = request.ParentTask;
         var taskId = taskRequest.Id ?? Guid.NewGuid();
         var groupId = taskRequest.GroupId ?? TaskGroupConstants.DefaultGroupId;
+
+        // For root tasks, use own ID as RootTaskId and request's TrackHistory
+        // For children, inherit RootTaskId and TrackHistory from root
+        var effectiveRootTaskId = rootTaskId ?? taskId;
+        var effectiveTrackHistory = trackHistory ?? taskRequest.TrackHistory;
 
         var task = new TaskItem
         {
@@ -235,15 +249,17 @@ public class TaskService : ITaskService
             ParentTaskId = parentId,
             Weight = taskRequest.Weight,
             SubtaskParallelism = taskRequest.SubtaskParallelism,
-            AuthToken = authToken
+            AuthToken = authToken,
+            RootTaskId = effectiveRootTaskId,
+            TrackHistory = effectiveTrackHistory
         };
 
         allTasks.Add(task);
 
-        // Recursively build children
+        // Recursively build children (pass root's RootTaskId and TrackHistory)
         foreach (var childRequest in request.ChildTasks)
         {
-            BuildTaskHierarchy(ownerId, childRequest, taskId, now, authToken, allTasks);
+            BuildTaskHierarchy(ownerId, childRequest, taskId, effectiveRootTaskId, effectiveTrackHistory, now, authToken, allTasks);
         }
 
         return task;
@@ -371,6 +387,8 @@ public class TaskService : ITaskService
             Weight = childRequest.Weight,
             SubtaskParallelism = childRequest.SubtaskParallelism,
             AuthToken = parent.AuthToken,  // Inherit auth token from parent
+            RootTaskId = parent.RootTaskId,  // Inherit root task ID from parent
+            TrackHistory = parent.TrackHistory,  // Inherit history tracking from parent
             CreatedAt = now,
             UpdatedAt = now
         };

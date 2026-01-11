@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, Observable, map, tap, catchError, of, combineLatest } from 'rxjs';
 import { TaskApiService } from './task-api.service';
 import { SignalRService } from './signalr.service';
-import { CreateTaskRequest, CreateTaskHierarchyRequest, TaskResponse, TaskTreeNode, ProgressHistoryEntry, StateChangeHistoryEntry, TaskState } from '../models/task.model';
+import { CreateTaskRequest, CreateTaskHierarchyRequest, TaskResponse, TaskTreeNode, ProgressHistoryEntry, StateChangeHistoryEntry, TaskState, ApiProgressHistoryEntry, ApiStateChangeHistoryEntry } from '../models/task.model';
 
 @Injectable({ providedIn: 'root' })
 export class TaskStoreService {
@@ -54,7 +54,13 @@ export class TaskStoreService {
       takeUntilDestroyed(this.destroyRef),
       tap(tasks => {
         const taskMap = new Map<string, TaskResponse>();
-        tasks.forEach(t => taskMap.set(t.id, t));
+        tasks.forEach(t => {
+          taskMap.set(t.id, t);
+          // Initialize history from API response for root tasks with tracking enabled
+          if (t.trackHistory && !t.parentTaskId) {
+            this.initializeHistoryFromApi(t);
+          }
+        });
         this.tasksMap$.next(taskMap);
         this.loadingSubject$.next(false);
       }),
@@ -346,6 +352,76 @@ export class TaskStoreService {
 
     historyMap.set(rootId, history);
     this.stateHistoryMap$.next(historyMap);
+  }
+
+  /**
+   * Initialize history maps from API response data (used on page load/refresh)
+   */
+  private initializeHistoryFromApi(task: TaskResponse): void {
+    // Initialize progress history from API
+    if (task.progressHistory && task.progressHistory.length > 0) {
+      const progressHistoryMap = new Map(this.progressHistoryMap$.value);
+      const existingHistory = progressHistoryMap.get(task.id) ?? [];
+
+      // Convert API DTOs to frontend display format
+      const apiEntries: ProgressHistoryEntry[] = task.progressHistory.map(entry => ({
+        taskId: entry.taskId,
+        taskType: entry.taskType,
+        timestamp: new Date(entry.timestamp),
+        percentage: entry.percentage,
+        details: entry.details,
+        payload: entry.payload,
+        displayText: entry.details ?? `${entry.percentage.toFixed(0)}%`
+      }));
+
+      // Merge: API entries first (older), then existing (newer live updates)
+      // Deduplicate by comparing taskId + timestamp
+      const merged = this.mergeHistoryEntries(apiEntries, existingHistory,
+        (a, b) => a.taskId === b.taskId && a.timestamp.getTime() === b.timestamp.getTime());
+
+      progressHistoryMap.set(task.id, merged.slice(-TaskStoreService.MAX_PROGRESS_HISTORY));
+      this.progressHistoryMap$.next(progressHistoryMap);
+    }
+
+    // Initialize state change history from API
+    if (task.stateChangeHistory && task.stateChangeHistory.length > 0) {
+      const stateHistoryMap = new Map(this.stateHistoryMap$.value);
+      const existingHistory = stateHistoryMap.get(task.id) ?? [];
+
+      // Convert API DTOs to frontend display format
+      const apiEntries: StateChangeHistoryEntry[] = task.stateChangeHistory.map(entry => ({
+        taskId: entry.taskId,
+        taskType: entry.taskType,
+        taskIdShort: entry.taskIdShort,
+        timestamp: new Date(entry.timestamp),
+        newState: entry.newState as TaskState
+      }));
+
+      // Merge: API entries first (older), then existing (newer live updates)
+      const merged = this.mergeHistoryEntries(apiEntries, existingHistory,
+        (a, b) => a.taskId === b.taskId && a.timestamp.getTime() === b.timestamp.getTime());
+
+      stateHistoryMap.set(task.id, merged.slice(-TaskStoreService.MAX_STATE_HISTORY));
+      this.stateHistoryMap$.next(stateHistoryMap);
+    }
+  }
+
+  /**
+   * Merge two arrays of history entries, removing duplicates based on comparator
+   */
+  private mergeHistoryEntries<T>(older: T[], newer: T[], isEqual: (a: T, b: T) => boolean): T[] {
+    const result = [...older];
+    for (const entry of newer) {
+      if (!result.some(existing => isEqual(existing, entry))) {
+        result.push(entry);
+      }
+    }
+    // Sort by timestamp (assuming entries have a timestamp property)
+    return result.sort((a: any, b: any) => {
+      const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+      const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+      return timeA - timeB;
+    });
   }
 
   // Tree building helpers

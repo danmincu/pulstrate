@@ -11,6 +11,7 @@ using TaskServer.Infrastructure.Authorization;
 using TaskServer.Infrastructure.Executors;
 using TaskServer.Infrastructure.Extensions;
 using TaskServer.Infrastructure.Services;
+using TaskServer.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -139,6 +140,10 @@ builder.Services.AddTaskServer(options =>
 });
 
 builder.Services.AddInMemoryTaskStorage();
+
+// Add Task History services
+builder.Services.AddSingleton<InMemoryTaskHistoryRepository>();
+builder.Services.AddScoped<ITaskHistoryService, TaskHistoryService>();
 
 // Add HttpClient factory for microservice calls
 builder.Services.AddHttpClient("TaskExecutor");

@@ -22,6 +22,29 @@ export interface TaskResponse {
   weight: number;
   subtaskParallelism: boolean;
   childCount: number;
+  // History tracking
+  trackHistory: boolean;
+  progressHistory?: ApiProgressHistoryEntry[];
+  stateChangeHistory?: ApiStateChangeHistoryEntry[];
+}
+
+// API DTOs for history (different from frontend display models)
+export interface ApiProgressHistoryEntry {
+  taskId: string;
+  taskType: string;
+  timestamp: string;
+  percentage: number;
+  details: string | null;
+  payload: string | null;
+}
+
+export interface ApiStateChangeHistoryEntry {
+  taskId: string;
+  taskType: string;
+  taskIdShort: string;
+  timestamp: string;
+  newState: string;
+  details: string | null;
 }
 
 export interface CreateTaskRequest {
@@ -34,6 +57,8 @@ export interface CreateTaskRequest {
   parentTaskId?: string;
   weight?: number;
   subtaskParallelism?: boolean;
+  // History tracking
+  trackHistory?: boolean;
 }
 
 export interface CreateTaskHierarchyRequest {

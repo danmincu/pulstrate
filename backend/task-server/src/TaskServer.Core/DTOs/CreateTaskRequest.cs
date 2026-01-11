@@ -9,5 +9,7 @@ public record CreateTaskRequest(
     // Hierarchical task support
     Guid? ParentTaskId = null,
     double Weight = 1.0,
-    bool SubtaskParallelism = true
+    bool SubtaskParallelism = true,
+    // History tracking
+    bool TrackHistory = false
 );

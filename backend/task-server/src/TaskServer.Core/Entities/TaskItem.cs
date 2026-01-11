@@ -33,4 +33,18 @@ public class TaskItem
     // Authentication token for downstream service calls
     // Captured at task creation time, used by executors for authenticated HTTP calls
     public string? AuthToken { get; set; }
+
+    // History tracking
+    /// <summary>
+    /// Whether to track progress and state change history for this task.
+    /// When true, history is recorded and returned with task responses.
+    /// Children inherit this setting from their root parent.
+    /// </summary>
+    public bool TrackHistory { get; set; } = false;
+
+    /// <summary>
+    /// The root task ID for hierarchical tasks. Equals own ID for root tasks.
+    /// Used for efficient history rollup without traversing parent chain.
+    /// </summary>
+    public Guid RootTaskId { get; set; }
 }
