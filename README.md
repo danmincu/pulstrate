@@ -1,5 +1,7 @@
 # Pulstrate
 
+https://www.youtube.com/watch?v=COGAi8NxVtU
+
 **I always wanted something like this.**
 
 A task management system that wasn't overkill, but wasn't too simple either. Something I could understand in an afternoon, extend by Monday, and trust in production by Friday.
