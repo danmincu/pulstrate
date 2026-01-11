@@ -751,9 +751,9 @@ public class MyMicroserviceExecutor : ITaskExecutor
 }
 ```
 
-### Built-in Microservice Call Task
+### Microservice Call Plugin Task
 
-The `microservice-call` task type is included for making HTTP calls with auth propagation:
+The `microservice-call` task type is a plugin for making HTTP calls with auth propagation:
 
 ```json
 {

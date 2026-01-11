@@ -148,7 +148,6 @@ builder.Services.AddSingleton<ITaskHttpClientFactory, TaskHttpClientFactory>();
 builder.Services.AddTaskExecutor<DemoTaskExecutor>();
 builder.Services.AddTaskExecutor<SimpleHierarchicalExecutor>();
 builder.Services.AddTaskExecutor<HierarchicalParentExecutor>();
-builder.Services.AddTaskExecutor<MicroserviceCallExecutor>();
 
 // Load plugin executors from plugins folder
 var pluginsPath = Path.Combine(AppContext.BaseDirectory, "plugins");

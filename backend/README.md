@@ -1162,9 +1162,9 @@ Tasks can make authenticated HTTP calls to downstream microservices using the JW
 | `TaskItem.AuthToken` | Core/Entities | Stores captured JWT token |
 | `ITaskHttpClientFactory` | Core/Interfaces | Creates authenticated HttpClient |
 | `TaskHttpClientFactory` | Infrastructure/Services | Implementation |
-| `MicroserviceCallExecutor` | Infrastructure/Executors | Built-in HTTP call executor |
+| `MicroserviceCallExecutor` | plugins/TaskServer.Plugins.MicroserviceCall | Plugin HTTP call executor |
 
-### 17.3 Built-in microservice-call Task
+### 17.3 microservice-call Plugin Task
 
 **Task Type**: `microservice-call`
 
