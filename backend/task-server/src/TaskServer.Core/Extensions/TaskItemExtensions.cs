@@ -21,6 +21,7 @@ public static class TaskItemExtensions
             task.ProgressDetails,
             task.ProgressPayload,
             task.StateDetails,
+            task.Output,
             task.CreatedAt,
             task.UpdatedAt,
             task.StartedAt,

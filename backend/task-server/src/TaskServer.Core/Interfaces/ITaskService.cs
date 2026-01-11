@@ -35,4 +35,25 @@ public interface ITaskService
     /// Adds multiple subtasks to an executing parent task.
     /// </summary>
     Task<IReadOnlyList<TaskItem>> AddSubtasksAsync(Guid parentTaskId, IReadOnlyList<CreateTaskRequest> childRequests, CancellationToken ct = default);
+
+    // Task output and payload modification for sequential workflows
+    /// <summary>
+    /// Sets the output of a task. Typically called by executors upon completion.
+    /// The output is accessible to parent executor hooks via TaskItem.Output.
+    /// </summary>
+    /// <param name="taskId">The task ID</param>
+    /// <param name="output">The output data (typically JSON)</param>
+    /// <param name="ct">Cancellation token</param>
+    Task SetTaskOutputAsync(Guid taskId, string output, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates the payload of a queued task. Only works for tasks in Queued state.
+    /// Used in sequential workflows to pass data from completed sibling to next sibling.
+    /// </summary>
+    /// <param name="taskId">The task ID (must be in Queued state)</param>
+    /// <param name="newPayload">The new payload (typically JSON)</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <exception cref="KeyNotFoundException">Task not found</exception>
+    /// <exception cref="InvalidOperationException">Task is not in Queued state</exception>
+    Task UpdateQueuedTaskPayloadAsync(Guid taskId, string newPayload, CancellationToken ct = default);
 }

@@ -15,6 +15,11 @@ public class TaskItem
     public string? ProgressDetails { get; set; }
     public string? ProgressPayload { get; set; }
     public string? StateDetails { get; set; }
+
+    // Task output - set by executor upon completion, accessible to parent executor hooks
+    // Provides a clean way to pass data between sequential subtasks
+    public string? Output { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public DateTime? StartedAt { get; set; }

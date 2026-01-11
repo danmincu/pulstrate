@@ -196,6 +196,131 @@ public class RetryingParentExecutor : TaskExecutorBase
 - Progress recalculates including new children (may decrease temporarily)
 - Parallelism settings remain unchanged from creation
 
+### Sequential Data Passing
+
+In sequential mode (`subtaskParallelism: false`), data can be passed from a completed task to its queued siblings. This enables pipeline workflows where each step processes output from the previous step.
+
+**How it works:**
+1. Child tasks are created but remain **Queued** (blocked) until their turn
+2. When a child completes, hooks fire **immediately before** the next child is enqueued
+3. The hook can read the completed child's `Output` and update the next queued sibling's `Payload`
+4. The next child then executes with the modified payload
+
+**Timeline guarantee:**
+```
+T1  child1 executes, sets Output
+T2  child1 completes
+T3  OnSubtaskStateChangeAsync(child1) fires     ← Hook reads child1.Output
+T4  Hook calls UpdateQueuedTaskPayloadAsync(child2, newPayload)
+T5  child2.Payload is updated                   ← Safe! child2 still Queued
+T6  child2 is enqueued and starts executing     ← Executes with new payload
+```
+
+**Example: Pipeline Executor**
+```csharp
+public class PipelineParentExecutor : TaskExecutorBase
+{
+    private readonly ITaskService _taskService;
+    private readonly ITaskRepository _repository;
+
+    public PipelineParentExecutor(ITaskService taskService, ITaskRepository repository)
+    {
+        _taskService = taskService;
+        _repository = repository;
+    }
+
+    public override string TaskType => "pipeline-parent";
+
+    public override Task ExecuteAsync(TaskItem task, IProgress<TaskProgressUpdate> progress, CancellationToken ct)
+    {
+        // Parent does nothing - orchestration happens via hooks
+        return Task.CompletedTask;
+    }
+
+    public override async Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parent, TaskItem child, TaskStateChange change)
+    {
+        if (change.NewState != TaskState.Completed)
+            return null;
+
+        // Read output from completed child
+        var outputData = child.Output;  // JSON string set by child executor
+
+        // Find next queued sibling
+        var siblings = await _repository.GetChildrenAsync(parent.Id);
+        var nextChild = siblings
+            .Where(s => s.State == TaskState.Queued)
+            .OrderBy(s => s.CreatedAt)
+            .FirstOrDefault();
+
+        if (nextChild != null)
+        {
+            // Build new payload incorporating previous output
+            var newPayload = JsonSerializer.Serialize(new {
+                inputFromPrevious = outputData,
+                stepNumber = siblings.Count(s => s.State == TaskState.Completed) + 1
+            });
+
+            // Update the queued task's payload BEFORE it starts
+            await _taskService.UpdateQueuedTaskPayloadAsync(nextChild.Id, newPayload);
+        }
+
+        return null;  // No new tasks to add
+    }
+}
+```
+
+**Child executor setting output:**
+```csharp
+public class DataProcessorExecutor : ITaskExecutor
+{
+    public string TaskType => "data-processor";
+
+    public async Task ExecuteAsync(TaskItem task, IProgress<TaskProgressUpdate> progress, CancellationToken ct)
+    {
+        var input = JsonSerializer.Deserialize<ProcessorInput>(task.Payload);
+
+        // Process data...
+        var result = await ProcessDataAsync(input);
+
+        // Set output for next task in pipeline
+        task.Output = JsonSerializer.Serialize(new {
+            processedRecords = result.Count,
+            outputPath = result.FilePath,
+            checksum = result.Checksum
+        });
+
+        progress.Report(new TaskProgressUpdate(100, "Processing complete"));
+    }
+}
+```
+
+**Creating a pipeline:**
+```json
+{
+  "parentTask": {
+    "type": "pipeline-parent",
+    "subtaskParallelism": false
+  },
+  "childTasks": [
+    {
+      "parentTask": { "type": "data-processor", "payload": "{\"source\":\"input.csv\"}" },
+      "childTasks": []
+    },
+    {
+      "parentTask": { "type": "data-processor", "payload": "{}" },
+      "childTasks": []
+    },
+    {
+      "parentTask": { "type": "data-processor", "payload": "{}" },
+      "childTasks": []
+    }
+  ]
+}
+```
+
+In this example, child2 and child3 start with empty payloads. When child1 completes, the hook updates child2's payload with child1's output before child2 executes.
+
 ---
 
 ## REST API Reference
@@ -321,6 +446,7 @@ export interface TaskResponse {
   progressDetails: string | null;
   progressPayload: string | null;
   stateDetails: string | null;
+  output: string | null;  // Task output set by executor on completion
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;

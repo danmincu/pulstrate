@@ -13,6 +13,8 @@ public record TaskResponse(
     string? ProgressDetails,
     string? ProgressPayload,
     string? StateDetails,
+    // Task output - set by executor upon completion
+    string? Output,
     DateTime CreatedAt,
     DateTime UpdatedAt,
     DateTime? StartedAt,

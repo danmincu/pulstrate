@@ -303,6 +303,9 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
 
         try
         {
+            // Track children that have already had their hooks called (for sequential mode)
+            var processedChildIds = new HashSet<Guid>();
+
             if (parent.SubtaskParallelism)
             {
                 // Execute children in parallel - enqueue all at once
@@ -314,21 +317,41 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
             }
             else
             {
-                // Execute children sequentially - enqueue one at a time and wait
+                // Execute children sequentially - call hooks BETWEEN children to enable data passing
                 _logger.LogInformation("Executing {ChildCount} children sequentially for parent {TaskId}", children.Count, parent.Id);
-                foreach (var child in children)
+
+                // Use list for index access (to potentially modify next child's payload)
+                var childList = children.ToList();
+
+                for (int i = 0; i < childList.Count; i++)
                 {
                     taskCts.Token.ThrowIfCancellationRequested();
 
+                    var child = childList[i];
                     await _queue.EnqueueAsync(child.Id, child.GroupId, child.Priority, stoppingToken);
 
                     // Wait for child to complete
                     await WaitForTaskCompletionAsync(child.Id, repository, taskCts.Token);
+
+                    // Refresh child from repository to get final state and output
+                    var completedChild = await repository.GetByIdAsync(child.Id, taskCts.Token);
+
+                    // Call hook IMMEDIATELY after child completes, BEFORE enqueueing next
+                    // This allows the hook to:
+                    // 1. Read the completed child's Output
+                    // 2. Update the next queued sibling's Payload via UpdateQueuedTaskPayloadAsync
+                    // 3. Dynamically add new subtasks
+                    if (completedChild != null && IsTerminalState(completedChild.State))
+                    {
+                        await HandleChildStateChangeAsync(parent, completedChild, baseExecutor, taskService, taskCts.Token);
+                        processedChildIds.Add(completedChild.Id);
+                    }
                 }
             }
 
-            // Wait for all children to complete, calling hooks when state changes
-            await WaitForAllChildrenWithHooksAsync(parent, repository, taskService, baseExecutor, taskCts.Token);
+            // Wait for all children (including dynamically added ones) to complete
+            // Skip children we've already processed hooks for (sequential mode pre-created children)
+            await WaitForAllChildrenWithHooksAsync(parent, repository, taskService, baseExecutor, processedChildIds, taskCts.Token);
 
             // Check if all children succeeded (fetch fresh - may include dynamically added children)
             var finalChildren = await repository.GetChildrenAsync(parent.Id, stoppingToken);
@@ -428,11 +451,21 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
     /// When a child reaches a terminal state, calls OnSubtaskStateChangeAsync on the parent executor.
     /// If the hook returns new subtasks, they are added to the parent.
     /// </summary>
+    /// <param name="parent">The parent task</param>
+    /// <param name="repository">Task repository</param>
+    /// <param name="taskService">Task service for adding dynamic subtasks</param>
+    /// <param name="baseExecutor">The parent's executor (may be null)</param>
+    /// <param name="alreadyProcessedChildIds">
+    /// Child IDs that have already had their hooks called (e.g., sequential mode pre-created children).
+    /// These will be skipped to avoid double-processing.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
     private async Task WaitForAllChildrenWithHooksAsync(
         TaskItem parent,
         ITaskRepository repository,
         ITaskService taskService,
         TaskExecutorBase? baseExecutor,
+        HashSet<Guid> alreadyProcessedChildIds,
         CancellationToken ct)
     {
         // Track the last known state of each child to detect changes
@@ -446,6 +479,14 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
             // Check for state changes
             foreach (var child in children)
             {
+                // Skip children that have already had their hooks called (sequential mode)
+                if (alreadyProcessedChildIds.Contains(child.Id))
+                {
+                    // Still track state for completion check, but don't call hooks again
+                    lastKnownStates[child.Id] = child.State;
+                    continue;
+                }
+
                 var hasKnownState = lastKnownStates.TryGetValue(child.Id, out var lastState);
 
                 if (!hasKnownState)

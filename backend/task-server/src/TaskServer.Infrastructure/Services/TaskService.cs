@@ -402,4 +402,39 @@ public class TaskService : ITaskService
         }
         return children;
     }
+
+    // Task output and payload modification for sequential workflows
+
+    public async Task SetTaskOutputAsync(Guid taskId, string output, CancellationToken ct = default)
+    {
+        var task = await _repository.GetByIdAsync(taskId, ct)
+            ?? throw new KeyNotFoundException($"Task {taskId} not found");
+
+        task.Output = output;
+        task.UpdatedAt = DateTime.UtcNow;
+        await _repository.UpdateAsync(task, ct);
+
+        _logger?.LogDebug("Set output for task {TaskId}: {OutputLength} chars", taskId, output?.Length ?? 0);
+    }
+
+    public async Task UpdateQueuedTaskPayloadAsync(Guid taskId, string newPayload, CancellationToken ct = default)
+    {
+        var task = await _repository.GetByIdAsync(taskId, ct)
+            ?? throw new KeyNotFoundException($"Task {taskId} not found");
+
+        if (task.State != TaskState.Queued)
+        {
+            throw new InvalidOperationException(
+                $"Cannot update payload for task in state {task.State}. Task must be in Queued state.");
+        }
+
+        var oldPayload = task.Payload;
+        task.Payload = newPayload;
+        task.UpdatedAt = DateTime.UtcNow;
+        await _repository.UpdateAsync(task, ct);
+
+        _logger?.LogInformation(
+            "Updated payload for queued task {TaskId} ({TaskType}): {OldLength} -> {NewLength} chars",
+            taskId, task.Type, oldPayload?.Length ?? 0, newPayload?.Length ?? 0);
+    }
 }
