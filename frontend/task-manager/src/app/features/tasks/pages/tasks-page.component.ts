@@ -9,6 +9,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskTreeComponent } from '../components/task-tree.component';
 import { CreateTaskDialogComponent } from '../dialogs/create-task-dialog.component';
 import { ConnectionStatusComponent } from '../../../core/components/connection-status.component';
+import { AuthButtonComponent } from '../../../core/components/auth-button/auth-button.component';
 import { TaskStoreService } from '../../../core/services/task-store.service';
 import { SignalRService } from '../../../core/services/signalr.service';
 
@@ -21,12 +22,14 @@ import { SignalRService } from '../../../core/services/signalr.service';
     MatButtonModule,
     MatIconModule,
     TaskTreeComponent,
-    ConnectionStatusComponent
+    ConnectionStatusComponent,
+    AuthButtonComponent
   ],
   template: `
     <mat-toolbar color="primary">
       <span>PULSTRATE</span>
       <span class="spacer"></span>
+      <app-auth-button></app-auth-button>
       <app-connection-status></app-connection-status>
       <button mat-raised-button class="new-task-btn" (click)="openCreateDialog()">
         <mat-icon>add</mat-icon>
@@ -89,6 +92,10 @@ import { SignalRService } from '../../../core/services/signalr.service';
 
     app-connection-status {
       margin-right: 8px;
+    }
+
+    app-auth-button {
+      margin-right: 16px;
     }
   `]
 })

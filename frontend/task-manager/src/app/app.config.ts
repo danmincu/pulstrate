@@ -1,9 +1,10 @@
 import { ApplicationConfig, APP_INITIALIZER, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { routes } from './app.routes';
 import { TaskFormRegistryService } from './shared/task-forms/task-form-registry.service';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { CountdownFormComponent } from './shared/task-forms/forms/countdown-form.component';
 import { GenericFormComponent } from './shared/task-forms/forms/generic-form.component';
 import { RollDiceFormComponent } from './shared/task-forms/forms/rolldice-form.component';
@@ -38,7 +39,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    provideHttpClient(),
+    provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
     {
       provide: APP_INITIALIZER,

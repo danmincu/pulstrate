@@ -1,8 +1,9 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { environment } from '../../../environments/environment';
 import { TaskResponse, TaskState } from '../models/task.model';
+import { AuthService } from './auth.service';
 
 export interface StateChangedEvent {
   taskId: string;
@@ -29,6 +30,8 @@ export interface ConnectionInfo {
 
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
+  private readonly authService = inject(AuthService);
+
   private hubConnection: HubConnection | null = null;
   private manualReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
@@ -64,7 +67,9 @@ export class SignalRService {
 
     if (!this.hubConnection) {
       this.hubConnection = new HubConnectionBuilder()
-        .withUrl(`${environment.signalRUrl}/hubs/tasks`)
+        .withUrl(`${environment.signalRUrl}/hubs/tasks`, {
+          accessTokenFactory: () => this.authService.getToken() ?? ''
+        })
         .withAutomaticReconnect({
           nextRetryDelayInMilliseconds: (retryContext) => {
             // Custom retry strategy: 0, 1s, 2s, 5s, 10s, 30s (max)
