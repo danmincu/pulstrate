@@ -25,55 +25,23 @@ public class TaskHub : Hub<ITaskHubClient>
 
     private Guid GetUserId()
     {
-        // In development mode, return test user ID if not authenticated
+        var userIdClaim = Context.User?.FindFirst("user_id")?.Value
+                       ?? Context.User?.FindFirst("sub")?.Value;
+
+        // Try to parse as GUID first
+        if (!string.IsNullOrEmpty(userIdClaim) && Guid.TryParse(userIdClaim, out var userId))
+        {
+            return userId;
+        }
+
+        // In development mode, use test user ID if claim is missing or not a valid GUID
         if (_environment.IsDevelopment())
         {
-            var userIdClaim = Context.User?.FindFirst("user_id")?.Value
-                           ?? Context.User?.FindFirst("sub")?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim))
-            {
-                return TestUserId;
-            }
-
-            if (Guid.TryParse(userIdClaim, out var userId))
-            {
-                return userId;
-            }
-        }
-        else
-        {
-            var userIdClaim = Context.User?.FindFirst("user_id")?.Value
-                           ?? Context.User?.FindFirst("sub")?.Value
-                           ?? throw new HubException("User ID not found in token");
-
-            if (Guid.TryParse(userIdClaim, out var userId))
-            {
-                return userId;
-            }
+            return TestUserId;
         }
 
-        // Fallback: normalize the claim to a GUID
-        var claim = Context.User?.FindFirst("user_id")?.Value
-                 ?? Context.User?.FindFirst("sub")?.Value
-                 ?? string.Empty;
-
-        if (string.IsNullOrEmpty(claim))
-        {
-            return _environment.IsDevelopment() ? TestUserId : throw new HubException("User ID not found in token");
-        }
-
-        var normalized = new string(claim.Where(c => char.IsLetterOrDigit(c)).ToArray());
-        if (normalized.Length >= 32)
-        {
-            normalized = normalized.Substring(0, 32);
-        }
-        else
-        {
-            normalized = normalized.PadLeft(32, '0');
-        }
-
-        return Guid.Parse($"{normalized.Substring(0, 8)}-{normalized.Substring(8, 4)}-{normalized.Substring(12, 4)}-{normalized.Substring(16, 4)}-{normalized.Substring(20, 12)}");
+        // Production mode requires valid user ID
+        throw new HubException("User ID not found in token or not a valid GUID");
     }
 
     public override async Task OnConnectedAsync()
