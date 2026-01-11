@@ -1131,11 +1131,63 @@ public abstract class TaskExecutorBase : ITaskExecutor
     // Override these for custom subtask handling
     public virtual void OnSubtaskProgress(TaskItem parent, TaskItem child, TaskProgressUpdate progress) { }
     public virtual void OnSubtaskStateChange(TaskItem parent, TaskItem child, TaskStateChange change) { }
+    public virtual Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parent, TaskItem child, TaskStateChange change) { return null; }
     public virtual void OnAllSubtasksSuccess(TaskItem parent, IReadOnlyList<TaskItem> children) { }
 }
 ```
 
-### 16.9 Built-in Hierarchical Executors
+### 16.9 Dynamic Subtask Addition
+
+Executors can dynamically add subtasks during execution by overriding `OnSubtaskStateChangeAsync`. This enables reactive workflows where subsequent tasks depend on previous results.
+
+**Example: Retry Failed Subtasks**
+```csharp
+public class RetryingParentExecutor : TaskExecutorBase
+{
+    public override string TaskType => "retrying-parent";
+
+    public override Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parent, TaskItem child, TaskStateChange change)
+    {
+        if (change.NewState == TaskState.Errored)
+        {
+            // Retry failed child with same payload
+            var retry = new CreateTaskRequest(
+                Id: null,
+                Priority: child.Priority,
+                Type: child.Type,
+                Payload: child.Payload,
+                GroupId: child.GroupId,
+                Weight: child.Weight,
+                SubtaskParallelism: null
+            );
+            return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(
+                new List<CreateTaskRequest> { retry });
+        }
+        return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(null);
+    }
+}
+```
+
+**Key Behaviors:**
+- Only subtasks of the current parent can be added (not root-level tasks)
+- New subtasks inherit parent's `AuthToken` automatically
+- Progress recalculates to include new children (may jump back)
+- Parallelism setting (`SubtaskParallelism`) remains as set at creation
+- New children in parallel mode are enqueued immediately
+- New children in sequential mode execute after current batch
+
+**ITaskService Methods for Dynamic Addition:**
+```csharp
+// Add single subtask to executing parent
+Task<TaskItem> AddSubtaskAsync(Guid parentTaskId, CreateTaskRequest child, CancellationToken ct);
+
+// Add multiple subtasks to executing parent
+Task<IReadOnlyList<TaskItem>> AddSubtasksAsync(Guid parentTaskId, IReadOnlyList<CreateTaskRequest> children, CancellationToken ct);
+```
+
+### 16.10 Built-in Hierarchical Executors
 
 | Executor | Task Type | Description |
 |----------|-----------|-------------|

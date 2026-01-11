@@ -162,6 +162,40 @@ Parent Progress = Σ(child.progress × child.weight) / Σ(child.weight)
 
 Use weights to reflect relative task importance in overall progress.
 
+### Dynamic Subtask Addition
+
+Executors can dynamically add subtasks during execution by overriding `OnSubtaskStateChangeAsync`. This enables reactive workflows like:
+- **Retry patterns**: Automatically retry failed subtasks
+- **Saga patterns**: Add compensating actions on failure
+- **Conditional workflows**: Add follow-up tasks based on results
+
+```csharp
+public class RetryingParentExecutor : TaskExecutorBase
+{
+    public override string TaskType => "retrying-parent";
+
+    public override Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parent, TaskItem child, TaskStateChange change)
+    {
+        if (change.NewState == TaskState.Errored)
+        {
+            // Return new subtasks to add
+            return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(
+                new List<CreateTaskRequest> {
+                    new(null, child.Priority, child.Type, child.Payload, child.GroupId, child.Weight, null)
+                });
+        }
+        return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(null);
+    }
+}
+```
+
+**Key behaviors:**
+- Only subtasks of the current parent can be added (not root tasks)
+- New subtasks inherit parent's auth token
+- Progress recalculates including new children (may decrease temporarily)
+- Parallelism settings remain unchanged from creation
+
 ---
 
 ## REST API Reference
