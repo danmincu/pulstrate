@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TaskServer.Core.Constants;
+using TaskServer.Core.DTOs;
 using TaskServer.Core.Entities;
 using TaskServer.Core.Interfaces;
 
@@ -129,6 +130,7 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
             var repository = scope.ServiceProvider.GetRequiredService<ITaskRepository>();
             var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var progressAggregation = scope.ServiceProvider.GetRequiredService<IProgressAggregationService>();
+            var taskService = scope.ServiceProvider.GetRequiredService<ITaskService>();
 
             var task = await repository.GetByIdAsync(taskId, stoppingToken);
             if (task == null)
@@ -154,7 +156,7 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
                 groupSemaphore.Release();
                 semaphoreReleased = true;
 
-                await ExecuteParentTaskAsync(task, children, repository, notifications, progressAggregation, groupId, stoppingToken);
+                await ExecuteParentTaskAsync(task, children, repository, notifications, progressAggregation, taskService, groupId, stoppingToken);
                 return;
             }
 
@@ -201,6 +203,12 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
                     await notifications.NotifyProgressAsync(taskId, task.OwnerId, update.Percentage, update.Details, update.PayloadJson);
                     // Aggregate progress to parent if exists
                     await progressAggregation.OnChildProgressReportedAsync(taskId, update.Percentage, CancellationToken.None);
+
+                    // Call OnSubtaskProgress on the parent executor if this task has a parent
+                    if (task.ParentTaskId.HasValue)
+                    {
+                        await CallParentOnSubtaskProgressAsync(task, update, repository);
+                    }
                 });
 
                 await executor.ExecuteAsync(task, progress, taskCts.Token);
@@ -267,6 +275,7 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
         ITaskRepository repository,
         INotificationService notifications,
         IProgressAggregationService progressAggregation,
+        ITaskService taskService,
         Guid groupId,
         CancellationToken stoppingToken)
     {
@@ -318,10 +327,10 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
                 }
             }
 
-            // Wait for all children to complete
-            await WaitForAllChildrenCompletionAsync(parent.Id, repository, taskCts.Token);
+            // Wait for all children to complete, calling hooks when state changes
+            await WaitForAllChildrenWithHooksAsync(parent, repository, taskService, baseExecutor, taskCts.Token);
 
-            // Check if all children succeeded
+            // Check if all children succeeded (fetch fresh - may include dynamically added children)
             var finalChildren = await repository.GetChildrenAsync(parent.Id, stoppingToken);
             var allSucceeded = finalChildren.All(c => c.State == TaskState.Completed);
 
@@ -414,12 +423,138 @@ public class TaskProcessorService : BackgroundService, ITaskCancellationService
         }
     }
 
+    /// <summary>
+    /// Waits for all children to complete while calling lifecycle hooks on state changes.
+    /// When a child reaches a terminal state, calls OnSubtaskStateChangeAsync on the parent executor.
+    /// If the hook returns new subtasks, they are added to the parent.
+    /// </summary>
+    private async Task WaitForAllChildrenWithHooksAsync(
+        TaskItem parent,
+        ITaskRepository repository,
+        ITaskService taskService,
+        TaskExecutorBase? baseExecutor,
+        CancellationToken ct)
+    {
+        // Track the last known state of each child to detect changes
+        var lastKnownStates = new Dictionary<Guid, TaskState>();
+
+        while (!ct.IsCancellationRequested)
+        {
+            // Fetch fresh children (may include dynamically added ones)
+            var children = await repository.GetChildrenAsync(parent.Id, ct);
+
+            // Check for state changes
+            foreach (var child in children)
+            {
+                var hasKnownState = lastKnownStates.TryGetValue(child.Id, out var lastState);
+
+                if (!hasKnownState)
+                {
+                    // New child (either initial or dynamically added)
+                    lastKnownStates[child.Id] = child.State;
+
+                    // If it's already in a terminal state (unlikely for new children), call hook
+                    if (IsTerminalState(child.State))
+                    {
+                        await HandleChildStateChangeAsync(parent, child, baseExecutor, taskService, ct);
+                    }
+                }
+                else if (child.State != lastState)
+                {
+                    // State changed
+                    lastKnownStates[child.Id] = child.State;
+
+                    // If reached terminal state, call the hook
+                    if (IsTerminalState(child.State))
+                    {
+                        await HandleChildStateChangeAsync(parent, child, baseExecutor, taskService, ct);
+                    }
+                }
+            }
+
+            // Check if all children are in terminal state
+            if (children.Count > 0 && children.All(c => IsTerminalState(c.State)))
+            {
+                return;
+            }
+
+            await Task.Delay(_options.TaskQueuePollingIntervalMs, ct);
+        }
+    }
+
+    /// <summary>
+    /// Handles a child reaching a terminal state by calling executor hooks.
+    /// If OnSubtaskStateChangeAsync returns new subtasks, they are added to the parent.
+    /// </summary>
+    private async Task HandleChildStateChangeAsync(
+        TaskItem parent,
+        TaskItem child,
+        TaskExecutorBase? baseExecutor,
+        ITaskService taskService,
+        CancellationToken ct)
+    {
+        var stateChange = new TaskStateChange(child.Id, child.State, child.StateDetails);
+
+        // Call the synchronous hook (for backwards compatibility and logging)
+        baseExecutor?.OnSubtaskStateChange(parent, child, stateChange);
+
+        // Call the async hook that can return new subtasks
+        if (baseExecutor != null)
+        {
+            try
+            {
+                var newSubtasks = await baseExecutor.OnSubtaskStateChangeAsync(parent, child, stateChange);
+
+                if (newSubtasks != null && newSubtasks.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "Parent {ParentId}: Adding {Count} dynamic subtasks after child {ChildId} ({ChildType}) -> {State}",
+                        parent.Id, newSubtasks.Count, child.Id, child.Type, child.State);
+
+                    // Add the new subtasks - they will be enqueued and included in waiting
+                    await taskService.AddSubtasksAsync(parent.Id, newSubtasks, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Error calling OnSubtaskStateChangeAsync for parent {ParentId}, child {ChildId}",
+                    parent.Id, child.Id);
+            }
+        }
+    }
+
     private static bool IsTerminalState(TaskState state)
     {
         return state == TaskState.Completed ||
                state == TaskState.Cancelled ||
                state == TaskState.Errored ||
                state == TaskState.Terminated;
+    }
+
+    /// <summary>
+    /// Calls OnSubtaskProgress on the parent executor when a child reports progress.
+    /// </summary>
+    private async Task CallParentOnSubtaskProgressAsync(TaskItem child, TaskProgressUpdate update, ITaskRepository repository)
+    {
+        if (!child.ParentTaskId.HasValue)
+            return;
+
+        try
+        {
+            var parent = await repository.GetByIdAsync(child.ParentTaskId.Value, CancellationToken.None);
+            if (parent == null)
+                return;
+
+            if (_executors.TryGetValue(parent.Type, out var parentExecutor) && parentExecutor is TaskExecutorBase baseExecutor)
+            {
+                baseExecutor.OnSubtaskProgress(parent, child, update);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error calling OnSubtaskProgress for child {ChildId}", child.Id);
+        }
     }
 
     public bool TryCancelRunningTask(Guid taskId)

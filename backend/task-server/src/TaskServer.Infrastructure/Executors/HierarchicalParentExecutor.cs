@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TaskServer.Core.DTOs;
 using TaskServer.Core.Entities;
 using TaskServer.Core.Interfaces;
 
@@ -9,6 +10,16 @@ namespace TaskServer.Infrastructure.Executors;
 /// Parent tasks don't execute work themselves - they orchestrate their children.
 /// The TaskProcessorService handles the actual orchestration.
 /// This executor provides lifecycle hooks for monitoring subtask completion.
+///
+/// To create a custom parent executor that can dynamically add subtasks:
+/// 1. Inherit from TaskExecutorBase
+/// 2. Override OnSubtaskStateChangeAsync to return new CreateTaskRequest objects
+/// 3. The returned subtasks will be added to this parent and executed
+///
+/// Example use cases:
+/// - Retry failed subtasks automatically
+/// - Add follow-up tasks based on subtask results
+/// - Implement saga patterns with compensating actions
 /// </summary>
 public class HierarchicalParentExecutor : TaskExecutorBase
 {
@@ -46,6 +57,26 @@ public class HierarchicalParentExecutor : TaskExecutorBase
         _logger.LogInformation(
             "Hierarchical parent {ParentId}: Child {ChildId} ({ChildType}) state changed to {NewState}",
             parent.Id, child.Id, child.Type, change.NewState);
+    }
+
+    /// <summary>
+    /// Called when a child task reaches a terminal state.
+    /// Override this method to dynamically add new subtasks based on child completion/failure.
+    ///
+    /// The default hierarchical-parent does not add dynamic subtasks.
+    /// Create a custom executor to implement dynamic subtask logic.
+    ///
+    /// Example: To retry failed tasks, return a new CreateTaskRequest with the same type/payload.
+    /// Example: To add follow-up tasks, return new CreateTaskRequests based on the completed child's result.
+    /// </summary>
+    public override Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parentTask,
+        TaskItem childTask,
+        TaskStateChange stateChange)
+    {
+        // Default hierarchical-parent does not add dynamic subtasks
+        // Subclasses can override this to add custom logic
+        return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(null);
     }
 
     public override void OnAllSubtasksSuccess(TaskItem parentTask, IReadOnlyList<TaskItem> completedChildren)

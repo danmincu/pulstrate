@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TaskServer.Core.Constants;
 using TaskServer.Core.DTOs;
 using TaskServer.Core.Entities;
@@ -11,17 +12,23 @@ public class TaskService : ITaskService
     private readonly ITaskQueue _queue;
     private readonly INotificationService _notifications;
     private readonly ITaskCancellationService? _cancellationService;
+    private readonly IProgressAggregationService? _progressAggregation;
+    private readonly ILogger<TaskService>? _logger;
 
     public TaskService(
         ITaskRepository repository,
         ITaskQueue queue,
         INotificationService notifications,
-        ITaskCancellationService? cancellationService = null)
+        ITaskCancellationService? cancellationService = null,
+        IProgressAggregationService? progressAggregation = null,
+        ILogger<TaskService>? logger = null)
     {
         _repository = repository;
         _queue = queue;
         _notifications = notifications;
         _cancellationService = cancellationService;
+        _progressAggregation = progressAggregation;
+        _logger = logger;
     }
 
     public async Task<TaskItem> CreateTaskAsync(Guid ownerId, CreateTaskRequest request, string? authToken = null, CancellationToken ct = default)
@@ -334,5 +341,65 @@ public class TaskService : ITaskService
         }
 
         return deleted;
+    }
+
+    // Dynamic subtask addition during execution
+
+    public async Task<TaskItem> AddSubtaskAsync(Guid parentTaskId, CreateTaskRequest childRequest, CancellationToken ct = default)
+    {
+        var parent = await _repository.GetByIdAsync(parentTaskId, ct)
+            ?? throw new KeyNotFoundException($"Parent task {parentTaskId} not found");
+
+        if (parent.State != TaskState.Executing)
+        {
+            throw new InvalidOperationException(
+                $"Cannot add subtask to parent in state {parent.State}. Parent must be in Executing state.");
+        }
+
+        var now = DateTime.UtcNow;
+        var child = new TaskItem
+        {
+            Id = childRequest.Id ?? Guid.NewGuid(),
+            OwnerId = parent.OwnerId,
+            GroupId = childRequest.GroupId ?? parent.GroupId,
+            Priority = childRequest.Priority,
+            Type = childRequest.Type,
+            Payload = childRequest.Payload,
+            State = TaskState.Queued,
+            Progress = 0,
+            ParentTaskId = parentTaskId,
+            Weight = childRequest.Weight,
+            SubtaskParallelism = childRequest.SubtaskParallelism,
+            AuthToken = parent.AuthToken,  // Inherit auth token from parent
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _repository.AddAsync(child, ct);
+        await _queue.EnqueueAsync(child.Id, child.GroupId, child.Priority, ct);
+        await _notifications.NotifyTaskCreatedAsync(child);
+
+        // Trigger progress recalculation (new child will be included with 0% progress)
+        if (_progressAggregation != null)
+        {
+            await _progressAggregation.OnChildStateChangedAsync(child.Id, TaskState.Queued, ct);
+        }
+
+        _logger?.LogInformation(
+            "Dynamically added subtask {ChildId} ({ChildType}) to executing parent {ParentId}",
+            child.Id, child.Type, parentTaskId);
+
+        return child;
+    }
+
+    public async Task<IReadOnlyList<TaskItem>> AddSubtasksAsync(Guid parentTaskId, IReadOnlyList<CreateTaskRequest> childRequests, CancellationToken ct = default)
+    {
+        var children = new List<TaskItem>();
+        foreach (var request in childRequests)
+        {
+            var child = await AddSubtaskAsync(parentTaskId, request, ct);
+            children.Add(child);
+        }
+        return children;
     }
 }

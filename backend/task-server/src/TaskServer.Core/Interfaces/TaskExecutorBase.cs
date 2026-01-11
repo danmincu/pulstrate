@@ -1,3 +1,4 @@
+using TaskServer.Core.DTOs;
 using TaskServer.Core.Entities;
 
 namespace TaskServer.Core.Interfaces;
@@ -38,6 +39,25 @@ public abstract class TaskExecutorBase : ITaskExecutor
     public virtual void OnSubtaskStateChange(TaskItem parentTask, TaskItem childTask, TaskStateChange stateChange)
     {
         // Default: no-op
+    }
+
+    /// <summary>
+    /// Called when a child task changes state. Override to dynamically add new subtasks.
+    /// Return new subtasks to add to the current parent task. These will be enqueued and
+    /// executed according to the parent's parallelism setting.
+    /// Progress will be recalculated to include the new children.
+    /// </summary>
+    /// <param name="parentTask">The parent task (only subtasks of this parent can be added)</param>
+    /// <param name="childTask">The child task that changed state</param>
+    /// <param name="stateChange">The state change details</param>
+    /// <returns>List of new subtasks to add, or null/empty for no additions</returns>
+    public virtual Task<IReadOnlyList<CreateTaskRequest>?> OnSubtaskStateChangeAsync(
+        TaskItem parentTask,
+        TaskItem childTask,
+        TaskStateChange stateChange)
+    {
+        // Default: no dynamic subtasks
+        return Task.FromResult<IReadOnlyList<CreateTaskRequest>?>(null);
     }
 
     /// <summary>

@@ -17,4 +17,22 @@ public interface ITaskService
     Task<IReadOnlyList<TaskItem>> GetChildTasksAsync(Guid parentTaskId, Guid ownerId, CancellationToken ct = default);
     Task<TaskItem> CancelTaskSubtreeAsync(Guid taskId, Guid ownerId, CancellationToken ct = default);
     Task<bool> DeleteTaskSubtreeAsync(Guid taskId, Guid ownerId, CancellationToken ct = default);
+
+    // Dynamic subtask addition during execution
+    /// <summary>
+    /// Adds a subtask to an executing parent task. The parent must be in Executing state.
+    /// The child inherits the parent's auth token and defaults to the parent's group.
+    /// </summary>
+    /// <param name="parentTaskId">The ID of the executing parent task</param>
+    /// <param name="childRequest">The child task to create</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The created child task</returns>
+    /// <exception cref="KeyNotFoundException">Parent task not found</exception>
+    /// <exception cref="InvalidOperationException">Parent is not in Executing state</exception>
+    Task<TaskItem> AddSubtaskAsync(Guid parentTaskId, CreateTaskRequest childRequest, CancellationToken ct = default);
+
+    /// <summary>
+    /// Adds multiple subtasks to an executing parent task.
+    /// </summary>
+    Task<IReadOnlyList<TaskItem>> AddSubtasksAsync(Guid parentTaskId, IReadOnlyList<CreateTaskRequest> childRequests, CancellationToken ct = default);
 }
