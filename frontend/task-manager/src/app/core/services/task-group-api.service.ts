@@ -7,7 +7,7 @@ import { TaskGroup, CreateTaskGroupRequest, UpdateTaskGroupRequest } from '../mo
 @Injectable({ providedIn: 'root' })
 export class TaskGroupApiService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.apiUrl}/api/v1/dev/groups`;
+  private readonly apiUrl = `${environment.apiUrl}/api/v1/groups`;
 
   getGroups(): Observable<TaskGroup[]> {
     return this.http.get<TaskGroup[]>(this.apiUrl);

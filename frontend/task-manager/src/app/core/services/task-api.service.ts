@@ -7,7 +7,7 @@ import { CreateTaskRequest, CreateTaskHierarchyRequest, TaskResponse } from '../
 @Injectable({ providedIn: 'root' })
 export class TaskApiService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.apiUrl}/api/v1/dev/tasks`;
+  private readonly apiUrl = `${environment.apiUrl}/api/v1/tasks`;
 
   getTasks(): Observable<TaskResponse[]> {
     return this.http.get<TaskResponse[]>(this.apiUrl);

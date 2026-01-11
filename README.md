@@ -41,7 +41,7 @@ A full-stack task management and execution system with real-time progress tracki
 - **Boolean Logic Workflows**: AND/OR/JOIN patterns via sequential/parallel child execution
 - **Plugin System**: Dynamically loaded task executors from DLL plugins
 - **Group-Based Parallelism**: Independent parallelism limits per task group
-- **Firebase Authentication**: JWT-based authentication with development bypass endpoints
+- **Firebase Authentication**: JWT-based authentication with compile-time debug/release switching
 
 ## Technology Stack
 
@@ -170,30 +170,30 @@ Use weights to reflect relative task importance in overall progress.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/dev/tasks` | List all tasks |
-| GET | `/api/v1/dev/tasks/{id}` | Get single task |
-| POST | `/api/v1/dev/tasks` | Create task |
-| POST | `/api/v1/dev/tasks/{id}/cancel` | Cancel task |
-| DELETE | `/api/v1/dev/tasks/{id}` | Delete task |
+| GET | `/api/v1/tasks` | List all tasks |
+| GET | `/api/v1/tasks/{id}` | Get single task |
+| POST | `/api/v1/tasks` | Create task |
+| POST | `/api/v1/tasks/{id}/cancel` | Cancel task |
+| DELETE | `/api/v1/tasks/{id}` | Delete task |
 
 ### Hierarchical Task Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/dev/tasks/hierarchy` | Create parent + children atomically |
-| GET | `/api/v1/dev/tasks/{id}/children` | Get immediate children |
-| POST | `/api/v1/dev/tasks/{id}/cancel-subtree` | Cancel task and all descendants |
-| DELETE | `/api/v1/dev/tasks/{id}/subtree` | Delete entire subtree |
+| POST | `/api/v1/tasks/hierarchy` | Create parent + children atomically |
+| GET | `/api/v1/tasks/{id}/children` | Get immediate children |
+| POST | `/api/v1/tasks/{id}/cancel-subtree` | Cancel task and all descendants |
+| DELETE | `/api/v1/tasks/{id}/subtree` | Delete entire subtree |
 
 ### Groups Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/dev/groups` | List all groups |
-| GET | `/api/v1/dev/groups/{id}` | Get single group |
-| POST | `/api/v1/dev/groups` | Create group |
-| PUT | `/api/v1/dev/groups/{id}` | Update group |
-| DELETE | `/api/v1/dev/groups/{id}` | Delete group |
+| GET | `/api/v1/groups` | List all groups |
+| GET | `/api/v1/groups/{id}` | Get single group |
+| POST | `/api/v1/groups` | Create group |
+| PUT | `/api/v1/groups/{id}` | Update group |
+| DELETE | `/api/v1/groups/{id}` | Delete group |
 
 ### Health Endpoints
 
@@ -202,7 +202,7 @@ Use weights to reflect relative task importance in overall progress.
 | GET | `/health/live` | Liveness probe |
 | GET | `/health/ready` | Readiness probe |
 
-> **Note**: Replace `/api/v1/dev/` with `/api/v1/` for authenticated endpoints.
+> **Note**: Authentication is controlled by compile-time `#if DEBUG` directives. Debug builds use `[AllowAnonymous]`, Release builds require JWT authentication.
 
 ---
 
@@ -258,7 +258,9 @@ const connection = new HubConnectionBuilder()
 
 ### Development Mode
 
-Use `/api/v1/dev/*` endpoints during development - no authentication required.
+Authentication is controlled by compile-time `#if DEBUG` preprocessor directives:
+- **Debug builds** (`dotnet run` or `dotnet build`): `[AllowAnonymous]` - no JWT required
+- **Release builds** (`dotnet build -c Release`): `[Authorize]` - JWT required
 
 ---
 
@@ -313,7 +315,7 @@ export interface CreateTaskHierarchyRequest {
 
 @Injectable({ providedIn: 'root' })
 export class TaskApiService {
-  private readonly baseUrl = `${environment.apiUrl}/api/v1/dev/tasks`;
+  private readonly baseUrl = `${environment.apiUrl}/api/v1/tasks`;
 
   constructor(private http: HttpClient) {}
 

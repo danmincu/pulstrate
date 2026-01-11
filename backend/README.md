@@ -762,6 +762,36 @@ Implement middleware to catch and format all exceptions consistently.
 
 ---
 
+## 14. Commands
+
+```bash
+# Create solution
+dotnet new sln -n TaskServer
+
+# Create projects
+dotnet new classlib -n TaskServer.Core -f net10.0
+dotnet new classlib -n TaskServer.Infrastructure -f net10.0
+dotnet new webapi -n TaskServer.Api -f net10.0
+
+# Add to solution
+dotnet sln add src/TaskServer.Core
+dotnet sln add src/TaskServer.Infrastructure
+dotnet sln add src/TaskServer.Api
+
+# Add package references (Api project)
+dotnet add package Microsoft.AspNetCore.SignalR
+dotnet add package Asp.Versioning.Mvc
+dotnet add package Asp.Versioning.Mvc.ApiExplorer
+dotnet add package Swashbuckle.AspNetCore
+dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer
+
+# Add project references
+dotnet add TaskServer.Api reference TaskServer.Core TaskServer.Infrastructure
+dotnet add TaskServer.Infrastructure reference TaskServer.Core
+```
+
+---
+
 ## Appendix A: Sample API Calls
 
 ### Create Task
@@ -900,22 +930,50 @@ var executorTypes = assembly.GetTypes()
 | generic | GenericFormComponent | Manual type + JSON payload input |
 | rolldice | RollDiceFormComponent | Dice selection with odds calculator |
 
-### 15.6 Development Mode
+### 15.6 Compile-Time Authentication Switching
 
-**DevTasksController**:
-- Endpoint: `/api/v1/dev/tasks`
-- No `[Authorize]` attribute
-- Uses fixed OwnerId: `00000000-0000-0000-0000-000000000001`
-- All task operations work without JWT token
+Authentication is controlled by `#if DEBUG` preprocessor directives at compile time:
 
-**TaskHub**:
-- `[Authorize]` attribute commented out for development
-- User ID extraction returns development user when auth is disabled
+**Debug Builds** (`dotnet run` or `dotnet build`):
+- Controllers use `[AllowAnonymous]` attribute
+- Uses fixed test user ID: `00000000-0000-0000-0000-000000000001`
+- No JWT token required for any operations
 
-**Enabling Production Auth**:
-1. Uncomment `[Authorize]` on `TaskHub`
-2. Switch frontend to use `/api/v1/tasks` endpoint
-3. Configure Firebase project ID in `appsettings.json`
+**Release Builds** (`dotnet build -c Release`):
+- Controllers use `[Authorize]` attribute
+- Extracts user ID from JWT claims (`user_id` or `sub`)
+- Requires valid Firebase JWT token
+
+**Implementation Pattern**:
+```csharp
+[ApiController]
+[Route("api/v{version:apiVersion}/tasks")]
+#if DEBUG
+[AllowAnonymous]
+#else
+[Authorize]
+#endif
+public class TasksController : ControllerBase
+{
+    #if DEBUG
+    private static readonly Guid TestUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private Guid GetUserId() => TestUserId;
+    #else
+    private Guid GetUserId()
+    {
+        var userIdClaim = User.FindFirst("user_id")?.Value
+                       ?? User.FindFirst("sub")?.Value
+                       ?? throw new UnauthorizedAccessException("User ID not found in token");
+        // ... JWT parsing logic
+    }
+    #endif
+}
+```
+
+**Benefits**:
+- Single source of truth (no duplicate controllers)
+- No runtime overhead (compile-time switching)
+- Secure by default (Release builds require auth automatically)
 
 ### 15.7 Delete Functionality
 

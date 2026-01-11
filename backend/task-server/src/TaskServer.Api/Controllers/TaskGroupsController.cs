@@ -10,7 +10,11 @@ namespace TaskServer.Api.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/groups")]
+#if DEBUG
+[AllowAnonymous]
+#else
 [Authorize]
+#endif
 public class TaskGroupsController : ControllerBase
 {
     private readonly ITaskGroupService _groupService;
@@ -98,6 +102,8 @@ public class TaskGroupsController : ControllerBase
         try
         {
             var group = await _groupService.CreateGroupAsync(request, ct);
+            _logger.LogInformation("Created group {GroupId} with name {GroupName}", group.Id, group.Name);
+
             var response = new TaskGroupResponse(
                 group.Id,
                 group.Name,
